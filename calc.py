@@ -11,7 +11,7 @@ regimes6to10 = ['Regime6', 'Regime7', 'Regime8', 'Regime9', 'Regime10']
 regimes1to5 = ['Regime1', 'Regime2', 'Regime3', 'Regime4', 'Regime5']
 
 
-#Import transition matrix
+#Import transition matrix from markov_chain.py
 def import_matrix():
     transition_matrix = pd.read_csv("transition_matrix.csv", index_col=0)
     transition_matrix = np.linalg.matrix_power(transition_matrix, 1)
@@ -26,41 +26,18 @@ def import_matrix():
 # Place and Hold strategy
 def basic_strategy (cap):
 
+    #Set starting value to cap
     df.at[df.index[0], "P&H"] = cap
 
+    # loop over all days    
     for i in range(1, len(df)):
-        df.at[df.index[i], "P&H"] = df.at[df.index[i - 1], "P&H"] * (1 + df.at[df.index[i], "Daily Return"])
+        df.at[df.index[i], "P&H"] = df.at[df.index[i - 1], "P&H"] * (1 + df.at[df.index[i], "Daily Return"]) #Calculate value Place and Hold
     return
 
-
-
-
-# # Investmens strategy using Markov Chains
-# def mc_strategy (cap, matrix):
-
-#     bank = cap
-#     invested = 0
-#     invest_harshness = 0.5
-
-#     df["MC Strategy"] = 0.0  # Initialize the column with zeros
-#     df.at[df.index[0], "MC Strategy"] = cap
-
-#     for i in range(1, len(df)):
-
-#         regime_today = df.at[df.index[i], "Regime"]
-#         prob_up_tmrw = matrix['sump6to10'].index(regime_today)
-#         prob_down_tmrw = 1-prob_up_tmrw
-
-#         bank = prob_down_tmrw*invest_harshness + bank
-#         invested = (prob_up_tmrw*invest_harshness*bank) + invested *(1+df.at[df.index[i], "Daily Return"])
-
-
-    return
 
 
 def investment_strategy(cap, trans_matrix):
         
-
     df.reset_index(inplace=True)
     
     # Add column for daily return
@@ -76,19 +53,24 @@ def investment_strategy(cap, trans_matrix):
     # Use pd.cut to create the 'Regime' column based on bins and labels
     df['Regime'] = pd.cut(df['Daily Return'], bins=bins, labels=regimes, right=False)
     
-    invest_harshness = 1 
-    divest_harshness = 0.2
-    df.at[0, 'bank'] = cap
-    df.at[0, 'invested'] = 0
+    invest_harshness = 1 # Factor for investing
+    divest_harshness = 0.2 # Factor for divesting
+    df.at[0, 'bank'] = cap # Start capital in bank
+    df.at[0, 'invested'] = 0 # Start capital invested in stock
     
+    # loop over all days
     for i in range(1,len(df)):
-        regime_today = df.iloc[i]['Regime']
-        prob_up_tomorrow = trans_matrix.loc[regime_today]['sump6to10']
-        prob_down_tomorrow = 1 - prob_up_tomorrow
-        
+        regime_today = df.iloc[i]['Regime'] # extract the regime today
+        prob_up_tomorrow = trans_matrix.loc[regime_today]['sump6to10'] # extract probability of the stock going up tomorrow based on todays regime
+        prob_down_tomorrow = 1 - prob_up_tomorrow # extract probability of the stock going down tomorrow based on todays regime
+
+        # Calculate how much to be divested from the stock into the bank
         df.at[i, 'bank'] = df.at[i-1, 'bank'] - (prob_up_tomorrow*invest_harshness*df.at[i-1, 'bank']) + (prob_down_tomorrow*divest_harshness*df.at[i-1,'invested'])
+
+        # Calculate how much to be invested in the stock
         df.at[i, 'invested'] = df.at[i-1, 'invested']*(1+df.iloc[i]['Daily Return'])+(prob_up_tomorrow*invest_harshness*df.at[i-1, 'bank']) - (prob_down_tomorrow*divest_harshness*df.at[i-1,'invested'])
 
+    # Calculate the sum of bank and invested = performance
     df['MC Strategy'] = df['bank'] + df['invested']
     return df
 
@@ -112,10 +94,12 @@ def plot ():
 
 if __name__ == "__main__":
 
+    #Starting capital
     cap = 100000
 
     transition_matrix = import_matrix()
 
+    #Download data
     df = yf.download("^OMX", start="2023-01-01",end="2023-12-01") 
     df["Daily Return"] = df["Close"].pct_change()
     
@@ -123,6 +107,9 @@ if __name__ == "__main__":
     investment_strategy(cap, transition_matrix)
 
     plot()
+    
+
+
     
 
 
