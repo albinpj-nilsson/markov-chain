@@ -36,7 +36,7 @@ import matplotlib.pyplot as plt
 import yfinance as yf
 
 # Constants
-regimes = ["Low", "Medium", "High"]
+regimes = ['Regime1', 'Regime2', 'Regime3', 'Regime4', 'Regime5', 'Regime6', 'Regime7', 'Regime8', 'Regime9', 'Regime10']
 
 # Functions
 def create_transition_matrix(df, regimes):
@@ -87,7 +87,7 @@ def power_iteration(P, max_iter=1000, tol=1e-6):
 # Main
 if __name__ == "__main__":
     # Read and format
-    ticker = "SPY"
+    ticker = "^OMX"
     df = yf.download(ticker, start = "2000-01-01", end = "2020-11-21")
     df.reset_index(inplace=True)
     # df = pd.read_csv("AAPL.csv", delimiter=",") 
@@ -95,23 +95,20 @@ if __name__ == "__main__":
     
     # Add column for daily return
     df['Daily return'] = df['Close'].pct_change()
+    plt.hist(df['Daily return'], bins=100)
     
     # Divide into 3 quantiles and add column for regimes
     # df['Regime'] = pd.qcut(df['Daily return'], q=3, labels=regimes)
     
     # Define conditions and choices for the 'Regime' column
-    conditions = [
-    (df['Daily return'] < 0),
-    (df['Daily return'] >= 0) & (df['Daily return'] <= 0.005),
-    (df['Daily return'] > 0.005)
-    ]
+    bins = np.arange(-0.02,0.025,0.005)
+    bins = np.insert(bins, 0, -1)
+    bins = np.insert(bins, 10, 1)
 
-    choices = ['Low', 'Medium', 'High']
-
-    # Use np.select to assign values to the 'Regime' column based on conditions
-    df['Regime'] = np.select(conditions, choices)
+    # Use pd.cut to create the 'Regime' column based on bins and labels
+    df['Regime'] = pd.cut(df['Daily return'], bins=bins, labels=regimes, right=False)
     
-    # Cretae transition matrix
+    # Create transition matrix
     transition_matrix = create_transition_matrix(df, regimes)
     
     # Find steady-state vector
