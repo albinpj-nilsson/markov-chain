@@ -60,45 +60,48 @@ def create_transition_matrix(df, regimes):
     
     return transition_matrix
 
-def power_iteration(P, max_iter=1000, tol=1e-6):
-    """
-    Finds the steady-state vector of the transition matrix
-    :param P: Transition matrix
-    :param max_iter: Maximum number of iterations
-    :param tol: Tolerance for iteration difference norm
+def investment_strategy(trans_matrix):
+        
+    ticker = "AAPL"
+    stock_data = yf.download(ticker, start = "2023-01-01", end = "2023-12-01")
+    stock_data.reset_index(inplace=True)
     
-    Proof: THEOREM 10.5.3 (Behaviour of P^n*x as n -> infinity)
-    """
-    n = len(P)
-    q = np.ones(n) / n  # Initial guess for the steady-state vector
+    # Add column for daily return
+    stock_data['Daily return'] = stock_data['Close'].pct_change()
+    
+    # Define conditions and choices for the 'Regime' column
+    bins = np.arange(-0.02,0.025,0.005)
+    bins = np.insert(bins, 0, -1)
+    bins = np.insert(bins, 10, 1)
 
-    for _ in range(max_iter):
-        q_new = np.dot(P, q)
-        q_new /= np.linalg.norm(q_new, 1)  # Normalize to ensure q is a probability distribution
+    # Use pd.cut to create the 'Regime' column based on bins and labels
+    stock_data['Regime'] = pd.cut(stock_data['Daily return'], bins=bins, labels=regimes, right=False)
+    
+    invest_harshness = 1 
+    divest_harshness = 0.2
+    stock_data.at[1, 'bank'] = 1000
+    stock_data.at[1, 'invested'] = 0
+    
+    for i in range(2,len(stock_data)):
+        regime_today = stock_data.iloc[i]['Regime']
+        prob_up_tomorrow = trans_matrix.loc[regime_today]['sump6to10']
+        prob_down_tomorrow = 1 - prob_up_tomorrow
+        
+        stock_data.at[i, 'bank'] = stock_data.at[i-1, 'bank'] - (prob_up_tomorrow*invest_harshness*stock_data.at[i-1, 'bank']) + (prob_down_tomorrow*divest_harshness*stock_data.at[i-1,'invested'])
+        stock_data.at[i, 'invested'] = stock_data.at[i-1, 'invested']*(1+stock_data.iloc[i]['Daily return'])+(prob_up_tomorrow*invest_harshness*stock_data.at[i-1, 'bank']) - (prob_down_tomorrow*divest_harshness*stock_data.at[i-1,'invested'])
 
-        # Check for convergence
-        if np.linalg.norm(q_new - q, 1) < tol:
-            return q_new
-
-        q = q_new
-
-    raise ValueError("Power iteration did not converge within the specified number of iterations.")
+    stock_data['sum'] = stock_data['bank'] + stock_data['invested']
+    return stock_data
 
 # Main
 if __name__ == "__main__":
     # Read and format
-    ticker = "^OMX"
-    df = yf.download(ticker, start = "2020-01-01", end = "2022-12-31")
+    ticker = "AAPL"
+    df = yf.download(ticker, start = "2010-01-01", end = "2022-12-01")
     df.reset_index(inplace=True)
-    # df = pd.read_csv("AAPL.csv", delimiter=",") 
-    # df['Close'] = df['Close'].str.replace(".","").astype(float)
     
     # Add column for daily return
     df['Daily return'] = df['Close'].pct_change()
-    plt.hist(df['Daily return'], bins=100)
-    
-    # Divide into 3 quantiles and add column for regimes
-    # df['Regime'] = pd.qcut(df['Daily return'], q=3, labels=regimes)
     
     # Define conditions and choices for the 'Regime' column
     bins = np.arange(-0.02,0.025,0.005)
@@ -125,5 +128,10 @@ if __name__ == "__main__":
     transition_matrix2['sump6to10'] = transition_matrix2[regimes6to10].sum(axis=1, numeric_only=True)    
     
     transition_matrix2.to_csv('transition_matrix.csv',index=True)
-    # Check steady-state vector
-    check_if_zero = np.linalg.norm(np.dot(np.eye(len(transition_matrix)) - transition_matrix, q))
+    
+    #Implement Investment Strategy
+    stock_results = investment_strategy(transition_matrix2)
+
+
+        
+        
