@@ -87,8 +87,8 @@ def power_iteration(P, max_iter=1000, tol=1e-6):
 # Main
 if __name__ == "__main__":
     # Read and format
-    ticker = "AAPL"
-    df = yf.download(ticker, start = "2000-01-01", end = "2020-11-21")
+    ticker = "^OMX"
+    df = yf.download(ticker, start = "2020-01-01", end = "2022-12-31")
     df.reset_index(inplace=True)
     # df = pd.read_csv("AAPL.csv", delimiter=",") 
     # df['Close'] = df['Close'].str.replace(".","").astype(float)
@@ -115,9 +115,15 @@ if __name__ == "__main__":
     # Find steady-state vector
     q = power_iteration(transition_matrix)
     
-    transition_matrix2 = np.linalg.matrix_power(transition_matrix, 2)
+    transition_matrix2 = np.linalg.matrix_power(transition_matrix, 1)
     transition_matrix2 = pd.DataFrame(transition_matrix2, columns=regimes, index=regimes)
-    transition_matrix2['sump05'] = transition_matrix2.sum(axis=1, numeric_only=True)
-
+    
+    regimes6to10 = ['Regime6', 'Regime7', 'Regime8', 'Regime9', 'Regime10']
+    regimes1to5 = ['Regime1', 'Regime2', 'Regime3', 'Regime4', 'Regime5']
+    
+    transition_matrix2['sump1to5'] = transition_matrix2[regimes1to5].sum(axis=1, numeric_only=True)
+    transition_matrix2['sump6to10'] = transition_matrix2[regimes6to10].sum(axis=1, numeric_only=True)    
+    
+    transition_matrix2.to_csv('transition_matrix.csv',index=True)
     # Check steady-state vector
     check_if_zero = np.linalg.norm(np.dot(np.eye(len(transition_matrix)) - transition_matrix, q))
