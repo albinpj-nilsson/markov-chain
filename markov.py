@@ -61,7 +61,8 @@ def create_transition_matrix(df, regimes):
     return transition_matrix
 
 def investment_strategy(trans_matrix):
-        
+    
+    #Create Training Data
     ticker = "AAPL"
     stock_data = yf.download(ticker, start = "2023-01-01", end = "2023-12-01")
     stock_data.reset_index(inplace=True)
@@ -70,26 +71,31 @@ def investment_strategy(trans_matrix):
     stock_data['Daily return'] = stock_data['Close'].pct_change()
     
     # Define conditions and choices for the 'Regime' column
-    bins = np.arange(-0.02,0.025,0.005)
-    bins = np.insert(bins, 0, -1)
-    bins = np.insert(bins, 10, 1)
+    bins = np.arange(-0.02,0.025,0.005) # Create following numpy array: (-0.02, -0.015, -0.01, -0.05, 0, 0.05, 0.01, 0.015, 0.02)
+    bins = np.insert(bins, 0, -1) # Add -1 at index 0
+    bins = np.insert(bins, 10, 1) # Add 1 at index 10, the array becomes:(-1, -0.02, -0.015, -0.01, -0.05, 0, 0.05, 0.01, 0.015, 0.02, 1)
 
     # Use pd.cut to create the 'Regime' column based on bins and labels
-    stock_data['Regime'] = pd.cut(stock_data['Daily return'], bins=bins, labels=regimes, right=False)
+    stock_data['Regime'] = pd.cut(stock_data['Daily return'], bins=bins, labels=regimes, right=False) # Daily return between -1 and -0.02 --> Regime 1 etc.
     
-    invest_harshness = 1 
-    divest_harshness = 0.2
-    stock_data.at[1, 'bank'] = 1000
-    stock_data.at[1, 'invested'] = 0
+    invest_harshness = 1 # Factor for investing
+    divest_harshness = 0.2 # Factor for divesting
+    stock_data.at[1, 'bank'] = 1000 # Start capital in bank
+    stock_data.at[1, 'invested'] = 0 # Start capital invested in stock
     
+    # loop over all days
     for i in range(2,len(stock_data)):
-        regime_today = stock_data.iloc[i]['Regime']
-        prob_up_tomorrow = trans_matrix.loc[regime_today]['sump6to10']
-        prob_down_tomorrow = 1 - prob_up_tomorrow
+        regime_today = stock_data.iloc[i]['Regime'] # extract the regime today
+        prob_up_tomorrow = trans_matrix.loc[regime_today]['sump6to10'] # extract probability of the stock going up tomorrow based on todays regime
+        prob_down_tomorrow = 1 - prob_up_tomorrow # extract probability of the stock going down tomorrow based on todays regime
         
+        # Calculate how much to be divested from the stock into the bank
         stock_data.at[i, 'bank'] = stock_data.at[i-1, 'bank'] - (prob_up_tomorrow*invest_harshness*stock_data.at[i-1, 'bank']) + (prob_down_tomorrow*divest_harshness*stock_data.at[i-1,'invested'])
+        
+        # Calculate how much to be invested in the stock
         stock_data.at[i, 'invested'] = stock_data.at[i-1, 'invested']*(1+stock_data.iloc[i]['Daily return'])+(prob_up_tomorrow*invest_harshness*stock_data.at[i-1, 'bank']) - (prob_down_tomorrow*divest_harshness*stock_data.at[i-1,'invested'])
 
+    # Calculate the sum of bank and invested = performance
     stock_data['sum'] = stock_data['bank'] + stock_data['invested']
     return stock_data
 
@@ -115,15 +121,14 @@ if __name__ == "__main__":
     transition_matrix = create_transition_matrix(df, regimes)
     transition_matrix.to_csv('transition_matrix.csv',index=True)
     
-    # Find steady-state vector
-    q = power_iteration(transition_matrix)
-    
+    #Disregard
     transition_matrix2 = np.linalg.matrix_power(transition_matrix, 1)
     transition_matrix2 = pd.DataFrame(transition_matrix2, columns=regimes, index=regimes)
     
     regimes6to10 = ['Regime6', 'Regime7', 'Regime8', 'Regime9', 'Regime10']
     regimes1to5 = ['Regime1', 'Regime2', 'Regime3', 'Regime4', 'Regime5']
     
+    # Calculate sum probabilities of going up and down based on which regime you are in right now
     transition_matrix2['sump1to5'] = transition_matrix2[regimes1to5].sum(axis=1, numeric_only=True)
     transition_matrix2['sump6to10'] = transition_matrix2[regimes6to10].sum(axis=1, numeric_only=True)    
     
